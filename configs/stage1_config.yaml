@@ -1,0 +1,27 @@
+experiment_name: "tinyimagenet_stage1_baseline"
+
+data:
+  root_dir: "data"
+  tiny_imagenet_dir: "data/raw/tiny-imagenet-200"
+  subset_index_path: "data/tiny_imagenet_5pct/train_index.csv"
+  batch_size: 64
+  num_workers: 4
+  image_size: 224
+
+training:
+  epochs: 5
+  optimizer: "adamw"
+  learning_rate: 3e-4
+  weight_decay: 0.01
+  mixed_precision: true
+  log_interval: 50
+
+model:
+  backbone: "resnet18"
+  num_classes: 200
+  freeze_backbone: false
+
+metrics:
+  ece_bins: 15
+  corruption_severity: 1
+

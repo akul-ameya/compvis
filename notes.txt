@@ -1,0 +1,232 @@
+================================================================================
+  HOW TO RUN THE ENTIRE PROJECT — Step by Step
+================================================================================
+
+PREREQUISITES
+  - Windows 10/11 with NVIDIA GPU (RTX 4060 or similar)
+  - Python 3.10+
+  - NVIDIA drivers + CUDA toolkit installed
+  - ~12 GB free disk for Stage 1 + dataset
+  - ~35 GB additional for synthetic images (Stage 2)
+
+
+================================================================================
+STEP 0: ENVIRONMENT SETUP (one time)
+================================================================================
+
+  Open PowerShell / Command Prompt, navigate to the project folder:
+
+    cd "C:\Users\akula\OneDrive - SP JAIN SCHOOL OF GLOBAL MANAGEMENT\Classes\Sem6\CV\Group"
+
+  Create a virtual environment:
+
+    python -m venv venv
+
+  Activate it:
+
+    venv\Scripts\activate
+
+  Install PyTorch with CUDA (change cu121 to match your CUDA version):
+
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+  Install the rest:
+
+    pip install numpy pandas matplotlib seaborn scikit-learn tqdm pyyaml scipy
+
+  Verify GPU:
+
+    python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name())"
+
+
+================================================================================
+STEP 1: RUN STAGE 1 NOTEBOOK
+================================================================================
+
+  Stage 1 is the baseline PoC. It runs end-to-end:
+    - Downloads Tiny ImageNet (~237 MB, first run only)
+    - Builds 5% stratified subset (25 images/class)
+    - EDA (sample grid, class distribution, image stats)
+    - Trains ResNet-18 baseline for 5 epochs
+    - Metrics: accuracy, ECE, corruption robustness, eigenvalue spectrum
+
+  TO RUN:
+    jupyter notebook notebooks/stage1_tinyimagenet_poc.ipynb
+    Then "Kernel > Restart & Run All"
+
+  EXPECTED TIME: ~10-15 minutes
+
+  OUTPUTS:
+    figures/sample_grid.png
+    figures/class_distribution.png
+    figures/loss_accuracy_curves.png
+    figures/sample_predictions.png
+    figures/reliability_diagram.png
+    figures/robustness_barplot.png
+    figures/eigenvalue_spectrum.png
+    checkpoints/resnet18_baseline_5pct.pth
+
+
+================================================================================
+STEP 2: WRITE THE STAGE 1 REPORT
+================================================================================
+
+  1. Open stage1_report_draft.md
+  2. Replace placeholders with numbers from notebook summary
+  3. Copy into IEEE template, insert figures, export PDF
+  4. Submit .ipynb + .pdf
+
+
+================================================================================
+STEP 3: GENERATE SYNTHETIC DATA (run overnight)
+================================================================================
+
+  Generate 375 images per class = 75,000 total. Takes ~20-30 hours on RTX 4060.
+
+  Install diffusion libraries:
+
+    pip install diffusers transformers accelerate
+
+  Run generation:
+
+    python -m src.data.generate_synthetic --images-per-class 375 --batch-size 4
+
+  The script is resumable: if interrupted, re-run the same command.
+
+  QUICK TEST (verify it works):
+
+    python -m src.data.generate_synthetic --images-per-class 2 --batch-size 2
+
+  TIPS:
+    - If CUDA OOM: reduce --batch-size to 2 or 1
+    - You can start with --images-per-class 250 (10x ratio) if time is tight
+      and still run meaningful experiments
+
+
+================================================================================
+STEP 4: RUN STAGE 2 NOTEBOOK
+================================================================================
+
+  The Stage 2 notebook trains all models and runs all analyses:
+
+    jupyter notebook notebooks/stage2_full_experiments.ipynb
+
+  Settings to check before running:
+    - GENERATE = False  (use cached synthetic images)
+    - EPOCHS = 30
+    - SYNTH_RATIOS = [5, 10, 15]
+
+  The notebook trains these models:
+
+    Phase 1 — Baselines (~20 min):
+      1. R18 Baseline
+      2. MV3 Baseline
+
+    Phase 2 — Uniform scaling study, R18 (~2 hours):
+      3. R18 Uniform 5x
+      4. R18 Uniform 10x
+      5. R18 Uniform 15x
+
+    Phase 3 — Adaptive policies at 15x, R18 (~1.5 hours):
+      6. R18 Hard-class 15x
+      7. R18 Uncertainty 15x
+      8. R18 Predicted-utility 15x
+
+    Phase 4 — Ceilings (~6-8 hours):
+      9. R18 Ceiling
+      10. MV3 Ceiling
+
+    Phase 5 — Cross-backbone transfer, MV3 (~1 hour):
+      11. MV3 Uniform 15x
+      12. MV3 PredUtil 15x (R18 policy transferred)
+
+  Total: ~12-14 hours. Run overnight.
+
+  All models are checkpointed. If interrupted, re-run and it continues
+  from where it left off.
+
+  After training, the notebook runs:
+    - FID quality assessment
+    - Synthetic scaling curves (accuracy, macro, ECE vs budget)
+    - Allocation policy comparison (uniform vs hard-class vs predicted)
+    - Per-class utility analysis + harm detection
+    - Utility prediction model (Ridge regression, feature importances)
+    - Calibration (ECE + temperature scaling)
+    - Corruption robustness per policy
+    - Feature coverage (compactness, separation, margin)
+    - Compute-normalised benefit
+    - Eigenvalue spectrum + linear probe + CKA
+    - Cross-backbone transfer validation
+
+  OUTPUTS:
+    figures/stage2/scaling_curves.png
+    figures/stage2/policy_comparison.png
+    figures/stage2/perclass_delta.png
+    figures/stage2/reliability_comparison.png
+    figures/stage2/robustness_comparison.png
+    figures/stage2/eigenvalue_comparison.png
+    figures/stage2/cka_matrix.png
+    checkpoints/s2_r18_baseline.pth
+    checkpoints/s2_r18_uniform_5x.pth ... 15x.pth
+    checkpoints/s2_r18_hardclass_15x.pth
+    checkpoints/s2_r18_uncertainty_15x.pth
+    checkpoints/s2_r18_predutil_15x.pth
+    checkpoints/s2_r18_ceiling.pth
+    checkpoints/s2_mv3_baseline.pth
+    checkpoints/s2_mv3_uniform_15x.pth
+    checkpoints/s2_mv3_predutil_15x.pth
+    checkpoints/s2_mv3_ceiling.pth
+
+
+================================================================================
+STEP 5: WRITE THE STAGE 2 REPORT
+================================================================================
+
+  1. Open stage2_report_draft.md
+  2. Fill in all placeholders from notebook summary
+  3. Copy into IEEE template, insert figures, export PDF
+  4. Submit .ipynb + .pdf
+
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+  "CUDA out of memory"
+    - Close other GPU applications
+    - Reduce BS from 64 to 32 in the notebook
+    - For generation: --batch-size 1
+
+  "Module not found"
+    - Activate venv: venv\Scripts\activate
+    - pip install -r requirements.txt
+
+  "Tiny ImageNet download fails"
+    - Download manually: http://cs231n.stanford.edu/tiny-imagenet-200.zip
+    - Extract to data/raw/tiny-imagenet-200/
+
+  "Notebook kernel dies"
+    - Memory issue. Restart kernel. Close other apps.
+
+  "num_workers error on Windows"
+    - Already handled: NW = 0 in notebooks
+
+  "scipy not found"
+    - pip install scipy
+
+  "Generation too slow"
+    - Use --images-per-class 250 (10x, enough for 2 of 3 ratios)
+    - Drop the 15x experiments and compare at 10x only
+
+
+================================================================================
+TIMELINE SUGGESTION
+================================================================================
+
+  Day 1: Run Stage 1 notebook, write report, submit
+  Day 1 evening: Start synthetic generation (overnight, 20-30 hours)
+  Day 2-3: Generation finishes. Start Stage 2 notebook (overnight)
+  Day 3: All training done. Review results. Analyse outputs.
+  Day 4: Write Stage 2 report. Polish. Submit.
+
+================================================================================

@@ -1,0 +1,14 @@
+torch==2.2.1
+torchvision==0.17.1
+torchaudio==2.2.1
+numpy==1.26.4
+pandas==2.2.0
+matplotlib==3.8.2
+seaborn==0.13.2
+scikit-learn==1.4.0
+tqdm==4.66.2
+pyyaml==6.0.1
+diffusers==0.27.0
+transformers==4.37.2
+accelerate==0.27.2
+scipy==1.12.0
