@@ -26,6 +26,9 @@ checkpoints/
 # Generated figures (reproducible from notebooks)
 figures/
 
+# Referenced papers
+refs/
+
 # IDE
 .vscode/
 .idea/

@@ -4,9 +4,9 @@
 
 ## I. Introduction
 
-Standard synthetic data augmentation treats all classes equally, allocating the same number of generated images regardless of class difficulty, synthetic fidelity, or downstream utility. We argue this uniform policy is suboptimal: under a fixed compute and storage budget, synthetic data has class-dependent value, and that value is predictable from measurable class properties.
+Standard synthetic data augmentation treats all classes equally, allocating the same number of generated images regardless of class difficulty, synthetic fidelity, or downstream utility. We argue this uniform policy is suboptimal: under a fixed synthetic budget, synthetic data has class-dependent value, and that value is predictable from measurable class properties.
 
-We study this on Tiny ImageNet (200 classes, 64x64 images) under single-GPU compute constraints. Our four pipelines are: (1) **Baseline** — ResNet-18 trained on 5% real data (25 images/class); (2) **Uniform DiffusionBoost** — the same backbone trained on 5% real data plus uniformly allocated synthetic images from Stable Diffusion; (3) **Adaptive DiffusionBoost** — same total synthetic budget allocated per class based on predicted utility; and (4) **Ceiling** — the same backbone trained on 100% real data. All experiments are replicated on MobileNetV3 to test cross-architecture generalisability.
+We study this on Tiny ImageNet (200 classes, 64x64 images). Our four pipelines are: (1) **Baseline** — ResNet-18 trained on 5% real data (25 images/class); (2) **Uniform DiffusionBoost** — the same backbone trained on 5% real data plus uniformly allocated synthetic images from Stable Diffusion; (3) **Adaptive DiffusionBoost** — same total synthetic budget allocated per class based on predicted utility; and (4) **Ceiling** — the same backbone trained on 100% real data. All experiments are replicated on MobileNetV3 to test cross-architecture generalisability.
 
 Our contributions are: (a) a synthetic data scaling study from 5x to 15x ratios characterising the dose-response relationship; (b) a class-level utility prediction framework identifying which classes benefit, are neutral, or are harmed by synthetic augmentation; (c) three adaptive allocation policies (hard-class, uncertainty-based, predicted-utility) compared against uniform allocation at equal total budget; and (d) a multi-axis evaluation covering accuracy, calibration, robustness, per-class breakdown, feature coverage, and representation geometry.
 
@@ -164,7 +164,7 @@ Adaptive allocation {improves/maintains} between-class separation while maintain
 | Hard-class | **Gh** pp | **Ghm** pp |
 | Predicted-utility | **Gp** pp | **Gpm** pp |
 
-Adaptive allocation achieves **X**x better compute efficiency than uniform augmentation.
+Adaptive allocation achieves **X**x better data efficiency than uniform augmentation (gain per generated image).
 
 ## IV. Discussion
 
@@ -180,7 +180,7 @@ Adaptive allocation achieves **X**x better compute efficiency than uniform augme
 
 ## V. Conclusion
 
-We demonstrate that uniform synthetic augmentation is suboptimal under fixed compute. By measuring class-level baseline properties and synthetic fidelity, we predict which classes will benefit from augmentation and allocate synthetic budget accordingly. Adaptive allocation improves macro and worst-class accuracy over uniform augmentation at equal total cost, reduces the number of harmed classes, and produces representations closer to the full-data model. These findings reframe synthetic augmentation from a uniform data-scaling technique to a class-aware resource allocation problem.
+We demonstrate that uniform synthetic augmentation is suboptimal under a fixed synthetic budget. By measuring class-level baseline properties and synthetic fidelity, we predict which classes will benefit from augmentation and allocate synthetic budget accordingly. Adaptive allocation improves macro and worst-class accuracy over uniform augmentation at equal total cost, reduces the number of harmed classes, and produces representations closer to the full-data model. These findings reframe synthetic augmentation from a uniform data-scaling technique to a class-aware resource allocation problem.
 
 ## VI. References
 
