@@ -4,7 +4,7 @@
 
 ## Abstract
 
-We study image classification in a low-data regime on Tiny ImageNet. Our central question is whether synthetic images from pretrained diffusion models can recover performance lost when only 5% of training data is available, and whether any recovery reflects genuine representation improvement. We introduce three pipelines: Baseline (5% real), DiffusionBoost (5% real + synthetic), and Ceiling (100% real). Stage 1 establishes a robust data pipeline, trains a ResNet-18 baseline, and produces accuracy, calibration, robustness, and representation diagnostics. The model achieves 37.15% Top-1 accuracy with ECE 0.0398. In Stage 2, we will extend to diffusion augmentation, investigate whether synthetic utility varies across classes, and analyse whether class-level properties of the baseline model can predict which categories benefit from synthetic augmentation.
+We study image classification in a low-data regime on Tiny ImageNet. Our central question is whether synthetic images from pretrained diffusion models can recover performance lost when only 5% of training data is available, and whether any recovery reflects genuine representation improvement. We introduce three pipelines: Baseline (5% real), DiffusionBoost (5% real + synthetic), and Ceiling (100% real). Stage 1 establishes a robust data pipeline, trains a ResNet-18 baseline, and produces accuracy, calibration, robustness, and representation diagnostics. The model achieves 35.50% Top-1 accuracy with ECE 0.0372. In Stage 2, we will extend to diffusion augmentation, investigate whether synthetic utility varies across classes, and analyse whether class-level properties of the baseline model can predict which categories benefit from synthetic augmentation.
 
 **Keywords** — Low-data classification, synthetic data augmentation, diffusion models, Tiny ImageNet, calibration (ECE), representation geometry, ResNet-18.
 
@@ -46,7 +46,7 @@ Our EDA confirms that the resulting subset is perfectly balanced by design (25 i
 
 *Fig. 1. Sample images from the 5% Tiny ImageNet subset across multiple classes.*
 
-All images are originally 64×64 pixels; a simple size histogram verifies the uniform resolution. We compute channel-wise statistics on a sample of the 5% subset: mean = [0.483, 0.440, 0.384], std = [0.265, 0.252, 0.269] (RGB), broadly consistent with ImageNet and justifying the use of ImageNet normalisation. We additionally compute the average inter-class cosine distance between pretrained feature embeddings (see notebook); this metric indicates class separability despite the low-data regime. We resize inputs from 64×64 to 224×224 because ResNet-18 pretrained weights expect ImageNet-scale spatial features; upscaling preserves compatibility with the pretrained convolutional filters. We apply standard augmentations (random crops, horizontal flips).
+All images are originally 64×64 pixels; a simple size histogram verifies the uniform resolution. We compute channel-wise statistics on a sample of the 5% subset: mean = [0.483, 0.440, 0.384], std = [0.265, 0.252, 0.269] (RGB), broadly consistent with ImageNet and justifying the use of ImageNet normalisation. We additionally compute the average inter-class cosine distance between pretrained feature embeddings (0.145), indicating reasonable class separability in representation space despite the low-data regime. We resize inputs from 64×64 to 224×224 because ResNet-18 pretrained weights expect ImageNet-scale spatial features; upscaling preserves compatibility with the pretrained convolutional filters. We apply standard augmentations (random crops, horizontal flips).
 
 ---
 
@@ -60,21 +60,21 @@ Figure 2 shows the training and validation loss/accuracy curves over epochs.
 
 *Fig. 2. Training loss and validation accuracy over 5 epochs for the ResNet-18 baseline.*
 
-The model achieves 37.15% Top-1 accuracy on the Tiny ImageNet validation set after 5 epochs, which satisfies the Stage 1 requirement of obtaining a non-trivial baseline. Sample predictions on held-out images confirm the pipeline runs end-to-end.
+The model achieves 35.50% Top-1 accuracy on the Tiny ImageNet validation set after 5 epochs, which satisfies the Stage 1 requirement of obtaining a non-trivial baseline. Sample predictions on held-out images confirm the pipeline runs end-to-end.
 
-Beyond accuracy, we compute Expected Calibration Error (ECE) on the validation set and obtain ECE = 0.0398. ECE measures the calibration gap between predicted confidence and empirical accuracy. Figure 3 shows the reliability diagram, indicating the model is mildly over-confident in this low-data setting.
+Beyond accuracy, we compute Expected Calibration Error (ECE) on the validation set and obtain ECE = 0.0372. ECE measures the calibration gap between predicted confidence and empirical accuracy. Figure 3 shows the reliability diagram, indicating the model is mildly over-confident in this low-data setting.
 
 **[INSERT FIGURE 3 HERE — file: figures/reliability_diagram.png]**
 
-*Fig. 3. Reliability diagram (ECE = 0.0398) on the full validation set.*
+*Fig. 3. Reliability diagram (ECE = 0.0372) on the full validation set.*
 
-We also perform a corruption benchmark with specified intensities: Gaussian noise (σ = 0.1), Gaussian blur (kernel size 5), and brightness shift (+0.2). These perturbations simulate common distribution shifts in real-world vision systems. Accuracy drops from 37.15% on clean data to 10.17%, 36.72%, and 31.15% under these perturbations, quantifying robustness. Per-class validation accuracy varies substantially across the 200 classes (mean 37.1%, range 0–92%, std 21.4%; Figure 4); this distribution provides the baseline for Stage 2 analysis of which classes benefit from synthetic augmentation.
+We also perform a corruption benchmark with specified intensities: Gaussian noise (σ = 0.1), Gaussian blur (kernel size 5), and brightness shift (+0.2). These perturbations simulate common distribution shifts in real-world vision systems. Accuracy drops from 35.50% on clean data to 10.02%, 36.33%, and 31.79% under these perturbations, quantifying robustness. Per-class validation accuracy varies substantially across the 200 classes (mean 35.5%, range 0–94%, std 21.1%; Figure 4); this distribution provides the baseline for Stage 2 analysis of which classes benefit from synthetic augmentation.
 
 **[INSERT FIGURE 4 HERE — file: figures/per_class_accuracy.png]**
 
 *Fig. 4. Histogram of per-class validation accuracy (baseline).*
 
-Finally, we extract penultimate-layer features, compute the covariance eigenvalue spectrum, and train a linear probe, obtaining 42.00% accuracy — providing an initial snapshot of representation geometry for later comparison against diffusion-augmented models.
+Finally, we extract penultimate-layer features, compute the covariance eigenvalue spectrum, and train a linear probe, obtaining 42.15% accuracy — providing an initial snapshot of representation geometry for later comparison against diffusion-augmented models.
 
 In Stage 2, we will introduce class-conditional synthetic images from Stable Diffusion and evaluate the augmented pipeline across calibration, robustness, and representation geometry using CKA similarity and feature covariance spectra. We will examine whether synthetic utility varies across semantic categories, and whether class-level properties from this baseline can predict which classes benefit. Experiments will be replicated on a second lightweight architecture to test generalisability.
 
