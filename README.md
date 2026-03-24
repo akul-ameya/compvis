@@ -1,10 +1,11 @@
-# Adaptive Synthetic Budget Allocation for Low-Data Image Classification Under Compute Constraints
+# Adaptive Synthetic Budget Allocation for Low-Data Image Classification
 
-In low-data image classification, diffusion-generated synthetic data has **class-dependent utility**. This project predicts that utility from class-level properties and exploits it to allocate synthetic budget more effectively than uniform augmentation under fixed compute.
+In low-data image classification, diffusion-generated synthetic data has **class-dependent utility**. This project predicts that utility from class-level properties and allocates synthetic budget more effectively than uniform augmentation under a fixed generation budget.
 
-**Dataset:** Tiny ImageNet (200 classes, 64x64)
-**Backbones:** ResNet-18, MobileNetV3 (both ImageNet pretrained)
-**GPU:** NVIDIA RTX 4060 (8 GB VRAM), 64 GB system RAM
+**Primary dataset:** Tiny ImageNet (200 classes, 64×64, trained at 224×224)  
+**Generalisation dataset:** CIFAR-100 (reduced experimental track, ResNet-18 only)  
+**Backbones:** ResNet-18 and **MobileNetV3-Small** (ImageNet pretrained)  
+**GPU:** NVIDIA RTX 4060 class hardware (local runs)
 
 ## Research Questions
 
@@ -21,106 +22,89 @@ In low-data image classification, diffusion-generated synthetic data has **class
 |----------|--------------|---------|
 | **Baseline** | 5% real (25 images/class) | Low-data floor |
 | **Uniform DiffusionBoost** | 5% real + uniform synthetic | Standard augmentation |
-| **Adaptive DiffusionBoost** | 5% real + class-aware allocation (same total budget) | Targeted augmentation |
-| **Ceiling** | 100% real (500 images/class) | Full-data upper bound |
+| **Adaptive DiffusionBoost** | 5% real + policy-allocated synthetic (same total budget) | Targeted augmentation |
+| **Ceiling** | 100% real | Full-data upper bound |
 
-### Synthetic Budget Scaling
+### Synthetic Budget Scaling (Tiny ImageNet)
 
-Synthetic budgets tested: **0x, 5x, 10x, 15x** the real data per class (0, 125, 250, 375 synthetic images/class). The scaling study characterises the dose-response relationship between synthetic data quantity and downstream metrics.
+Ratios **5×, 10×, 15×** per class (125 / 250 / 375 synthetic images per class). Cached under `data/synthetic/tiny_imagenet/` (or legacy `data/synthetic_sd/` auto-linked).
 
 ### Allocation Policies
 
-Under a fixed total synthetic budget, we compare:
-
 | Policy | Strategy |
 |--------|----------|
-| **Uniform** | Equal budget to every class |
-| **Hard-class** | More budget to classes with low baseline accuracy |
-| **Uncertainty-based** | More budget to classes with high prediction entropy |
-| **Fidelity-aware** | More budget to classes with high synthetic quality |
-| **Predicted-utility** | Budget proportional to predicted per-class gain |
+| **Uniform** | Equal synthetic count per class (reference total budget) |
+| **Hard-class** | Budget ∝ (1 − baseline accuracy) |
+| **Uncertainty-based** | Budget ∝ mean prediction entropy |
+| **Predicted-utility** | Ridge regression on class diagnostics; budget ∝ max(0, predicted gain) |
 
-The predicted-utility policy is trained on class-level features (baseline accuracy, entropy, synthetic fidelity, feature compactness) to predict per-class gain from augmentation.
+Predicted-utility targets are **per-class accuracy under Uniform 15× minus Baseline**, fitted after Uniform 15× completes.
 
-### Evaluation Axes
+### Evaluation
 
-| Axis | Metrics |
-|------|---------|
-| **Accuracy** | Top-1, macro, worst-20-class |
-| **Calibration** | ECE, reliability diagrams, temperature-scaled ECE |
-| **Robustness** | Gaussian noise, blur, brightness shift |
-| **Per-class** | Per-class gain/loss, harmful class detection |
-| **Synthetic quality** | FID, per-class fidelity proxy |
-| **Feature coverage** | Compactness, separation, centroid margin |
-| **Representation** | Eigenvalue spectrum, linear probe, CKA |
-| **Efficiency** | Gain per 1k generated images, gain per GPU-minute |
+`evaluate_stage2` (per run): Top-1 / macro / worst-k, ECE, **temperature scaling** (optimal \(T\), ECE after scaling), corruption suite, per-class accuracy, **linear probe** on frozen features (sklearn), **feature-covariance eigen-spectrum** + effective rank (and `eval_eigenvalues.png`), **linear CKA vs same-arch baseline** (`eval_cka_heatmap.png`). See `src/evaluation/stage2_eval.py` and `src/evaluation/eval_extras.py`.
+
+### Synthetic-aware loss & FID
+
+- **Weighted CE:** `training.synthetic_aware_loss` in YAML; distance-to-centroid weights using a **frozen baseline** of the same architecture (`src/training/synthetic_loss.py`). The notebook passes `baseline_ckpt_same_arch` for uniform / adaptive / ceiling.
+- **Global FID:** `src/evaluation/fid_stage2.py` + **clean-fid** (`results/{dataset}/fid_cache/`). Notebook flag `RUN_FID`.
 
 ## Repository Layout
 
 ```
 Group/
-├── notebooks/
-│   ├── stage1_tinyimagenet_poc.ipynb   # Stage 1: EDA + baseline PoC
-│   └── stage2_full_experiments.ipynb   # Stage 2: full experiments
-├── src/
-│   ├── data/
-│   │   ├── tiny_imagenet.py            # Download, subset, full-train, val datasets
-│   │   ├── transforms.py              # Train/val/corruption transforms
-│   │   ├── synthetic.py               # Synthetic + combined dataset classes
-│   │   └── generate_synthetic.py      # Stable Diffusion generation (CLI + importable)
-│   ├── models/
-│   │   └── resnet_baseline.py         # ResNet-18 + MobileNetV3 with feature extraction
-│   ├── training/
-│   │   └── train_eval.py              # Training loop, early stopping, cosine LR
-│   └── metrics/
-│       ├── metrics.py                 # Accuracy, ECE, robustness, eigenvalue analysis
-│       └── cka.py                     # Linear/RBF CKA
 ├── configs/
-│   ├── stage1_config.yaml
-│   └── stage2_config.yaml
-├── stage1_report_draft.md
-├── stage2_report_draft.md
-├── requirements.txt
-├── notes.txt
+│   ├── tiny_imagenet.yaml       # Stage 2 Tiny ImageNet experiment config
+│   ├── cifar100.yaml            # CIFAR-100 reduced-track config
+│   └── stage1_config.yaml
+├── notebooks/
+│   ├── stage1_tinyimagenet_poc.ipynb
+│   └── stage2_experiments.ipynb # Single Stage 2 entry: Run All
+├── src/
+│   ├── config.py                # YAML → dataclass loader
+│   ├── migration/               # Legacy synthetic + checkpoint links
+│   ├── synthesis/generate.py    # SD v1.5 generation (Tiny + CIFAR-100)
+│   ├── data/
+│   │   ├── tiny_imagenet.py, cifar100.py, registry.py
+│   │   ├── synthetic_dataset.py, transforms.py, generate_synthetic.py
+│   ├── models/backbone.py, resnet_baseline.py
+│   ├── allocation/policies.py
+│   ├── training/train_eval.py, stage2_train.py
+│   ├── evaluation/stage2_eval.py, eval_extras.py, fid_stage2.py
+│   ├── metrics/, stage2/orchestrator.py
+├── results/                     # Created at run time: dataset/pipeline/arch/timestamp/
+├── figures/stage2/
+├── stage1_report_draft.md, stage2_report_draft.md
+├── requirements.txt, notes.txt
 └── README.md
 ```
 
 ## Quick Start
 
 ```bash
-# 1. Environment
 python -m venv venv && venv\Scripts\activate
+# PyTorch first (use your CUDA build from pytorch.org; avoids overwriting with default PyPI torch)
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-pip install numpy pandas matplotlib seaborn scikit-learn tqdm pyyaml scipy
+pip install -r requirements-others.txt
 
-# 2. Stage 1
+# Stage 1
 jupyter notebook notebooks/stage1_tinyimagenet_poc.ipynb
 
-# 3. Generate synthetic data (overnight)
-pip install diffusers transformers accelerate
+# Synthetic pool (Tiny ImageNet) — resumable
 python -m src.data.generate_synthetic --images-per-class 375
 
-# 4. Stage 2
-jupyter notebook notebooks/stage2_full_experiments.ipynb
+# Stage 2 — one notebook, Run All (see flags inside)
+jupyter notebook notebooks/stage2_experiments.ipynb
 ```
 
-See `notes.txt` for detailed step-by-step instructions.
+`requirements.txt` still pins torch/torchvision/torchaudio for reproducibility; installing it wholesale can replace a CUDA build from PyTorch’s index—prefer **`requirements-others.txt`** after installing PyTorch as above.
 
-## Contributions
-
-1. A controlled Tiny ImageNet benchmark for synthetic augmentation under fixed compute
-2. A class-level utility framework identifying beneficial, neutral, and harmful augmentation regimes
-3. Adaptive synthetic budget allocation policies that outperform uniform allocation at equal total budget
-4. Multi-axis evaluation across accuracy, calibration, robustness, and representation geometry on two architectures
+Stage 2 auto-detects `data/synthetic_sd/` and links it to `data/synthetic/tiny_imagenet/` when needed. CIFAR-100 synthetic images are generated into `data/synthetic/cifar100/` when you enable that step in the notebook.
 
 ## References
 
-- Ho et al. (2020) — Denoising Diffusion Probabilistic Models
-- Dhariwal & Nichol (2021) — Diffusion Models Beat GANs on Image Synthesis
-- Rombach et al. (2022) — High-Resolution Image Synthesis with Latent Diffusion Models
-- Shorten & Khoshgoftaar (2019) — A Survey on Image Data Augmentation
-- Guo et al. (2017) — On Calibration of Modern Neural Networks
-- Kornblith et al. (2019) — Similarity of Neural Network Representations Revisited
-- Heusel et al. (2017) — GANs Trained by a Two Time-Scale Update Rule Converge (FID)
-- He et al. (2016) — Deep Residual Learning for Image Recognition
-- Howard et al. (2019) — Searching for MobileNetV3
+- Ho et al. (2020); Dhariwal & Nichol (2021); Rombach et al. (2022) — diffusion  
+- Shorten & Khoshgoftaar (2019) — augmentation survey  
+- Guo et al. (2017) — calibration  
+- Kornblith et al. (2019) — CKA  
+- He et al. (2016); Howard et al. (2019) — ResNet / MobileNetV3  

@@ -1,20 +1,24 @@
 # Stage 2 Report Draft — Adaptive Synthetic Budget Allocation for Low-Data Image Classification
 
-> IEEE Conference Template. Replace all **X/Y/Z** placeholders with actual results. Figures saved to `figures/stage2/`.
+> IEEE Conference Template. Replace all **X/Y/Z** placeholders with actual results. Figures saved to `figures/stage2/`. Metrics and checkpoints are logged under `results/{dataset}/{pipeline}/{architecture}/{timestamp}/`.
 
 ## I. Introduction
 
 Standard synthetic data augmentation treats all classes equally, allocating the same number of generated images regardless of class difficulty, synthetic fidelity, or downstream utility. We argue this uniform policy is suboptimal: under a fixed synthetic budget, synthetic data has class-dependent value, and that value is predictable from measurable class properties.
 
-We study this on Tiny ImageNet (200 classes, 64x64 images). Our four pipelines are: (1) **Baseline** — ResNet-18 trained on 5% real data (25 images/class); (2) **Uniform DiffusionBoost** — the same backbone trained on 5% real data plus uniformly allocated synthetic images from Stable Diffusion; (3) **Adaptive DiffusionBoost** — same total synthetic budget allocated per class based on predicted utility; and (4) **Ceiling** — the same backbone trained on 100% real data. All experiments are replicated on MobileNetV3 to test cross-architecture generalisability.
+We study **Tiny ImageNet** (200 classes, 64×64 native resolution, 224×224 training) as the primary benchmark. Our four pipelines are: (1) **Baseline** — ResNet-18 or **MobileNetV3-Small** trained on 5% real data (25 images/class); (2) **Uniform DiffusionBoost** — the same backbone trained on 5% real data plus uniformly allocated synthetic images from Stable Diffusion v1.5; (3) **Adaptive DiffusionBoost** — the same total synthetic budget allocated per class according to an explicit policy (hard-class, uncertainty-based, or predicted-utility); and (4) **Ceiling** — the same backbone trained on 100% real data. Experiments are replicated on both backbones on Tiny ImageNet to test cross-architecture behaviour.
 
-Our contributions are: (a) a synthetic data scaling study from 5x to 15x ratios characterising the dose-response relationship; (b) a class-level utility prediction framework identifying which classes benefit, are neutral, or are harmed by synthetic augmentation; (c) three adaptive allocation policies (hard-class, uncertainty-based, predicted-utility) compared against uniform allocation at equal total budget; and (d) a multi-axis evaluation covering accuracy, calibration, robustness, per-class breakdown, feature coverage, and representation geometry.
+We additionally report a **CIFAR-100 generalisation track** (100 classes, 32×32 native, 224×224 training): ResNet-18 only — Baseline, Uniform 15×, per-class **utility** targets (Uniform − Baseline), allocations (**hard_class** + **predicted_utility**), **Adaptive 15×** using `scope.cifar_adaptive_policy` in `configs/cifar100.yaml` (default **predicted_utility**), and Ceiling — without the full scaling grid or second backbone.
+
+Our contributions are: (a) a synthetic scaling study on Tiny ImageNet (5×, 10×, 15×) characterising the dose–response relationship; (b) class-level diagnostics and a ridge-based **predicted-utility** allocator whose targets are observed gains under Uniform 15×; (c) comparison of adaptive policies against uniform allocation at equal total budget; and (d) multi-axis evaluation (accuracy, calibration, corruption robustness, per-class analysis; extended geometry analyses as in Section II).
 
 ## II. Methodology
 
 ### Synthetic Data Generation and Quality Assessment
 
-We use Stable Diffusion v1.5 with DPM-Solver++ (25 steps, guidance scale 7.5) to generate up to 375 class-conditional images per class (75,000 total), providing the pool from which each allocation policy draws. Prompts derive from WordNet class labels with four template variations. To quantify generation fidelity before training, we compute the Frechet Inception Distance (FID) between real and synthetic images using InceptionV3 features. We also compute per-class synthetic quality proxies (mean feature distance to real centroid, intra-class diversity) that serve as inputs to the utility prediction model.
+We use Stable Diffusion v1.5 with DPM-Solver++ (25 steps, guidance scale 7.5), mixed precision, and 512×512 generation followed by downscaling to the dataset’s native resolution (64×64 for Tiny ImageNet, 32×32 for CIFAR-100). Up to **375** images per class are cached once under `data/synthetic/{dataset}/` and reused for all experiments. Prompts use four fixed templates with human-readable class names (WordNet synonyms for Tiny ImageNet; CIFAR-100 class names for the second dataset).
+
+**Global FID:** Fréchet Inception Distance between the **entire 5% real subset** (exported to PNG cache) and a **uniformly subsampled synthetic pool** at each budget (5× / 10× / 15× Tiny; 15× CIFAR), **one FID per ratio**. Implemented in `src/evaluation/fid_stage2.py` via **clean-fid** (`pip install clean-fid`); summaries under `results/{dataset}/fid_cache/fid_summary.json`. Not per-class FID (too few real images per class).
 
 ### Baseline and Class-Level Diagnostics
 
@@ -22,29 +26,30 @@ We first train each backbone (ResNet-18 and MobileNetV3) on 5% real data only. F
 
 ### Allocation Policies
 
-Given a fixed total synthetic budget B (equal to the uniform budget at a given ratio), each policy distributes B across 200 classes:
+Given a fixed total synthetic budget B (equal to uniform 15× on Tiny ImageNet: 200 × 375, and analogously 100 × 375 on CIFAR-100 when applicable), each policy distributes integer counts per class with **normalisation and per-class clamping** to `[min_floor, max_cap]` (defaults 50 and 375).
 
-- **Uniform.** Each class receives B/200 images.
-- **Hard-class.** Budget proportional to (1 - baseline_accuracy_c), directing resources to difficult classes.
-- **Uncertainty-based.** Budget proportional to mean prediction entropy, directing resources to classes the model is least certain about.
-- **Fidelity-aware.** Budget proportional to synthetic quality score, investing where generated images are higher fidelity.
-- **Predicted-utility.** A linear model trained on class-level features predicts per-class utility (accuracy gain from synthetic data); budget is proportional to predicted utility.
+- **Uniform.** Each class receives B / K images (K = number of classes), with remainder spread across classes.
+- **Hard-class.** Budget proportional to (1 − baseline per-class accuracy).
+- **Uncertainty-based.** Budget proportional to mean prediction entropy on the validation set.
+- **Predicted-utility.** Ridge regression predicts utility(c) = accuracy_c(Uniform 15×) − accuracy_c(Baseline); allocation is proportional to max(0, predicted utility). **Uniform 15× must be trained before** fitting this model. Hard-class and uncertainty policies depend only on Baseline diagnostics and may be prepared in parallel with Uniform 15× training.
 
-All policies are subject to a per-class cap (maximum available generated images) and a minimum allocation floor.
+Cross-architecture check: allocation CSVs derived from ResNet-18 diagnostics are also used to build training sets for MobileNetV3-Small where noted.
 
 ### Utility Prediction Model
 
-We define utility(c) = accuracy_c(DiffBoost) - accuracy_c(Baseline) for each class c under uniform augmentation. We then fit a regression model predicting utility from class-level features (baseline accuracy, entropy, fidelity, compactness, separation). We report feature importances and test whether the predicted-utility allocation improves on uniform allocation.
+We define utility(c) = accuracy_c(Uniform 15×) − accuracy_c(Baseline) on the validation set. A **ridge** model with cross-validated α predicts utility from class-level features (baseline accuracy, mean confidence, entropy, feature compactness, separation, nearest-centroid margin, and optional synthetic-quality proxy). We report training R² and cross-validated R² where sample size permits.
 
 ### Training Protocol
 
-Each pipeline trains a fresh ImageNet-pretrained backbone with a 200-way head using AdamW (lr=3e-4, weight decay=0.01), cosine annealing LR, mixed precision, and early stopping (patience 7, max 30 epochs). The Uniform DiffusionBoost experiments are run at four synthetic budgets: 5x, 10x, and 15x per class (125, 250, 375 synthetic images/class). Adaptive policies are compared at the highest budget (15x) to maximise the potential benefit of targeted allocation.
+Each pipeline trains a fresh ImageNet-pretrained backbone with a dataset-specific head (200-way Tiny ImageNet, 100-way CIFAR-100) using **AdamW** (lr = 3×10⁻⁴, weight decay = 0.01), **cosine annealing** (T_max = max epochs), **mixed precision**, and **early stopping** on validation Top-1 (patience 7, max 30 epochs, batch size 64). Uniform DiffusionBoost on Tiny ImageNet uses synthetic budgets **5×, 10×, and 15×** per class; adaptive policies are trained at the **15×** total budget unless stated otherwise.
+
+**Synthetic-aware loss (ablation):** sample weights downweight synthetic images whose frozen-backbone features lie far from the real class centroid and upweight close ones; real samples keep unit weight. Full ablation tables compare Adaptive runs with standard cross-entropy versus this reweighting.
 
 ### Evaluation Framework
 
 **Accuracy.** Top-1, macro (mean per-class), and worst-20-class accuracy on the 10,000-image validation set.
 
-**Calibration.** ECE (15 bins), reliability diagrams, and post-hoc temperature scaling (Guo et al. 2017).
+**Calibration.** ECE (15 bins), reliability diagrams, and post-hoc **temperature scaling**: grid search for scalar \(T\) minimising NLL on validation logits; report `ece` and `ece_after_scaling` in `metrics.json` (`temperature_scaling` block).
 
 **Robustness.** Accuracy under Gaussian noise (σ=0.1), Gaussian blur (k=5), and brightness shift (+0.2).
 
@@ -52,7 +57,7 @@ Each pipeline trains a fresh ImageNet-pretrained backbone with a 200-way head us
 
 **Feature coverage.** Within-class compactness, between-class separation, and nearest-centroid margin in penultimate feature space.
 
-**Representation geometry.** Eigenvalue spectrum, linear probe accuracy, and pairwise linear CKA.
+**Representation geometry.** **Eigenvalue spectrum** of validation feature covariance (top eigenvalues + effective rank in `metrics.json`; `eval_eigenvalues.png` per run). **Linear probe:** sklearn multinomial logistic regression on frozen penultimate features (5% real train → val). **Linear CKA** vs the **baseline** model on paired validation batches (`linear_cka_vs_ref`, `eval_cka_heatmap.png`). Implemented in `src/evaluation/eval_extras.py` and `evaluate_stage2`.
 
 **Compute-normalised benefit.** Gain per 1,000 generated images and gain per GPU-minute across policies.
 
@@ -60,7 +65,7 @@ Each pipeline trains a fresh ImageNet-pretrained backbone with a 200-way head us
 
 ### Accuracy and Architecture Consistency
 
-| Pipeline | R18 Top-1 | R18 Macro | R18 Worst-20 | MV3 Top-1 | MV3 Macro | MV3 Worst-20 |
+| Pipeline | R18 Top-1 | R18 Macro | R18 Worst-20 | MV3-Small Top-1 | MV3-Small Macro | MV3-Small Worst-20 |
 |----------|----------|----------|-------------|----------|----------|-------------|
 | Baseline | **X1**% | **M1**% | **W1**% | **X4**% | **M4**% | **W4**% |
 | Uniform 15x | **X2**% | **M2**% | **W2**% | **X5**% | **M5**% | **W5**% |
@@ -109,7 +114,7 @@ A ridge regression model predicting per-class utility from baseline accuracy, en
 
 ### Synthetic Quality (FID)
 
-Overall FID (real vs synthetic): **F_all**. Per-class fidelity correlates with per-class utility (r = **r_fid**), confirming that generation quality mediates downstream benefit.
+Global FID (5% real subset vs synthetic subsampled at each budget): **F_5x**, **F_10x**, **F_15x**. Optional correlation between per-class fidelity proxy and per-class utility: **r_fid**.
 
 ### Calibration and Temperature Scaling
 
@@ -176,7 +181,7 @@ Adaptive allocation achieves **X**x better data efficiency than uniform augmenta
 
 **Clean-robustness tradeoff.** {Discuss whether adaptive allocation gives a better Pareto frontier than uniform.}
 
-**Limitations.** Single generation model (SD v1.5), single dataset (Tiny ImageNet), utility prediction tested only as ridge regression. Future work could explore generation-time conditioning, prompt engineering for hard classes, or larger-scale datasets.
+**Limitations.** Single generation model (SD v1.5); CIFAR-100 track is intentionally reduced (ResNet-18, four runs); utility prediction uses ridge regression; synthetic-aware loss ablations add training cost. Future work could add prompt tuning, alternative backbones, or larger-scale datasets.
 
 ## V. Conclusion
 

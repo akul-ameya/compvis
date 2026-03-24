@@ -1,5 +1,51 @@
 ================================================================================
-  HOW TO RUN THE ENTIRE PROJECT — Step by Step
+  WHERE YOU ARE NOW — Stage 2 pipeline (updated)
+================================================================================
+
+You have a single Stage 2 notebook that can run the full stack in one go:
+
+  notebooks/stage2_experiments.ipynb  →  Kernel: Restart & Run All
+
+WHAT WAS JUST WIRED IN (no longer “report only”)
+  - Synthetic-aware weighted CE: configs use synthetic_aware_loss: true; training
+    uses frozen baseline features + real class centroids for synthetic samples.
+  - Global FID: RUN_FID + clean-fid; Tiny (5x/10x/15x) and CIFAR (15x); cache under
+    results/{dataset}/fid_cache/
+  - Richer eval: temperature scaling, linear probe, eigen-spectrum plots, CKA vs
+    baseline in each run folder (metrics.json + PNGs).
+
+DEFAULT FLAGS (full end-to-end — LONG runtime)
+  - RUN_MIGRATION = True
+  - RUN_CIFAR_GENERATE = True   ← very long Stable Diffusion job first time
+  - RUN_FID = True              ← heavy CPU/GPU after image caches built
+  - RUN_TINY_EXPERIMENTS = True
+  - RUN_CIFAR_EXPERIMENTS = True
+  - RUN_FIGURES = True
+
+To save time: set RUN_CIFAR_GENERATE = False if CIFAR synth already exists;
+set RUN_FID = False for a quicker training-only pass.
+
+ONE-TIME / BEFORE RUN ALL
+  1) cd to project root, activate venv.
+  2) pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+     then pip install -r requirements-others.txt
+  3) Ensure Tiny raw data + 5% index exist (Stage 1 notebook or prior setup).
+  4) Ensure Tiny synthetic pool exists OR legacy data/synthetic_sd (migration links it).
+
+CIFAR-100 TRACK (notebook section III)
+  - Baseline R18 → Uniform 15x → saves utility JSON → allocations hard_class +
+    predicted_utility → Adaptive uses scope.cifar_adaptive_policy in
+    configs/cifar100.yaml (default predicted_utility) → Ceiling.
+  - To force hard_class adaptive instead: set cifar_adaptive_policy: hard_class in YAML.
+
+FILLED REPORT / README
+  - Numbers: results/*/metrics.json and results/*/results_index.json
+  - FID: results/tiny_imagenet/fid_cache/fid_summary.json (and cifar100/…)
+  - Draft text pointers: stage2_report_draft.md (updated for implemented metrics)
+  - Repo overview: README.md
+
+================================================================================
+  (Legacy) HOW TO RUN THE ENTIRE PROJECT — Step by Step
 ================================================================================
 
 PREREQUISITES
@@ -30,9 +76,11 @@ STEP 0: ENVIRONMENT SETUP (one time)
 
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-  Install the rest:
+  Install the rest (avoids overwriting CUDA PyTorch from PyPI):
 
-    pip install numpy pandas matplotlib seaborn scikit-learn tqdm pyyaml scipy
+    pip install -r requirements-others.txt
+
+  Or use requirements.txt only if you want the pinned torch stack from the default index (may not match your CUDA build).
 
   Verify GPU:
 
@@ -104,78 +152,45 @@ STEP 3: GENERATE SYNTHETIC DATA (run overnight)
 
 
 ================================================================================
-STEP 4: RUN STAGE 2 NOTEBOOK
+STEP 4: RUN STAGE 2 NOTEBOOK (single entry point)
 ================================================================================
 
-  The Stage 2 notebook trains all models and runs all analyses:
+  Open:
 
-    jupyter notebook notebooks/stage2_full_experiments.ipynb
+    jupyter notebook notebooks/stage2_experiments.ipynb
 
-  Settings to check before running:
-    - GENERATE = False  (use cached synthetic images)
-    - EPOCHS = 30
-    - SYNTH_RATIOS = [5, 10, 15]
+  Use "Restart & Run All". Edit the flag cell at the top:
+    - RUN_MIGRATION — link legacy data/synthetic_sd to data/synthetic/tiny_imagenet
+    - RUN_CIFAR_GENERATE — first-time CIFAR-100 SD generation (very long)
+    - RUN_FID — global FID for Tiny + CIFAR (needs clean-fid in requirements.txt)
+    - RUN_TINY_EXPERIMENTS / RUN_CIFAR_EXPERIMENTS / RUN_FIGURES
+    - Per-section toggles (baselines, uniform scaling, adaptive, ceiling)
 
-  The notebook trains these models:
+  Config files: configs/tiny_imagenet.yaml, configs/cifar100.yaml
+    - training.synthetic_aware_loss — synthetic-aware CE (default true)
+    - scope.cifar_adaptive_policy — which allocation CSV CIFAR adaptive uses
 
-    Phase 1 — Baselines (~20 min):
-      1. R18 Baseline
-      2. MV3 Baseline
+  Outputs: results/{dataset}/{pipeline}/{arch}/{timestamp}/
+    metrics.json (extended), best.pt, training_curves.json, eval_*.png
 
-    Phase 2 — Uniform scaling study, R18 (~2 hours):
-      3. R18 Uniform 5x
-      4. R18 Uniform 10x
-      5. R18 Uniform 15x
+  Expected jobs (order in notebook; times approximate on RTX 4060):
 
-    Phase 3 — Adaptive policies at 15x, R18 (~1.5 hours):
-      6. R18 Hard-class 15x
-      7. R18 Uncertainty 15x
-      8. R18 Predicted-utility 15x
+    - R18 + MobileNetV3-Small baselines
+    - R18 uniform 5x / 10x / 15x (scaling)
+    - Both backbones uniform 15x
+    - Diagnostics + allocation CSVs + adaptive 15x (hard_class, uncertainty, predicted_utility) × both backbones
+    - Both backbones ceiling
+    - CIFAR-100 block: baseline, uniform 15x, utility + allocations, adaptive (policy from YAML), ceiling (R18 only)
 
-    Phase 4 — Ceilings (~6-8 hours):
-      9. R18 Ceiling
-      10. MV3 Ceiling
+  Each training run writes a new timestamped folder under results/. Re-run only the sections you need.
 
-    Phase 5 — Cross-backbone transfer, MV3 (~1 hour):
-      11. MV3 Uniform 15x
-      12. MV3 PredUtil 15x (R18 policy transferred)
+  After training, use RUN_FIGURES=True for summary plots; extend with report figures from metrics in results/.
 
-  Total: ~12-14 hours. Run overnight.
-
-  All models are checkpointed. If interrupted, re-run and it continues
-  from where it left off.
-
-  After training, the notebook runs:
-    - FID quality assessment
-    - Synthetic scaling curves (accuracy, macro, ECE vs budget)
-    - Allocation policy comparison (uniform vs hard-class vs predicted)
-    - Per-class utility analysis + harm detection
-    - Utility prediction model (Ridge regression, feature importances)
-    - Calibration (ECE + temperature scaling)
-    - Corruption robustness per policy
-    - Feature coverage (compactness, separation, margin)
-    - Compute-normalised benefit
-    - Eigenvalue spectrum + linear probe + CKA
-    - Cross-backbone transfer validation
-
-  OUTPUTS:
-    figures/stage2/scaling_curves.png
-    figures/stage2/policy_comparison.png
-    figures/stage2/perclass_delta.png
-    figures/stage2/reliability_comparison.png
-    figures/stage2/robustness_comparison.png
-    figures/stage2/eigenvalue_comparison.png
-    figures/stage2/cka_matrix.png
-    checkpoints/s2_r18_baseline.pth
-    checkpoints/s2_r18_uniform_5x.pth ... 15x.pth
-    checkpoints/s2_r18_hardclass_15x.pth
-    checkpoints/s2_r18_uncertainty_15x.pth
-    checkpoints/s2_r18_predutil_15x.pth
-    checkpoints/s2_r18_ceiling.pth
-    checkpoints/s2_mv3_baseline.pth
-    checkpoints/s2_mv3_uniform_15x.pth
-    checkpoints/s2_mv3_predutil_15x.pth
-    checkpoints/s2_mv3_ceiling.pth
+  OUTPUTS (typical):
+    results/{dataset}/{pipeline}/{arch}/{timestamp}/metrics.json, best.pt, training_curves.json
+    results/*/results_index.json
+    results/{dataset}/fid_cache/fid_summary.json
+    figures/stage2/summary_top1_last_runs.png (+ .pdf)
 
 
 ================================================================================
@@ -199,7 +214,7 @@ TROUBLESHOOTING
 
   "Module not found"
     - Activate venv: venv\Scripts\activate
-    - pip install -r requirements.txt
+    - pip install -r requirements-others.txt (and CUDA PyTorch from pytorch.org)
 
   "Tiny ImageNet download fails"
     - Download manually: http://cs231n.stanford.edu/tiny-imagenet-200.zip

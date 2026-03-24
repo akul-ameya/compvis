@@ -1,0 +1,58 @@
+dataset:
+  name: cifar100
+  num_classes: 100
+  real_images_per_class: 25
+  image_size: 224
+
+paths:
+  raw_data: data/raw/cifar100
+  subset_index: data/cifar100_5pct/train_index.csv
+  synthetic_root: data/synthetic/cifar100
+  synthetic_legacy: ""
+  results_root: results
+  figures_stage2: figures/stage2
+  checkpoints_legacy: checkpoints
+
+training:
+  epochs: 30
+  batch_size: 64
+  num_workers: 0
+  learning_rate: 3.0e-4
+  weight_decay: 0.01
+  mixed_precision: true
+  early_stopping_patience: 7
+  scheduler: cosine
+  synthetic_aware_loss: true
+
+generation:
+  model_id: runwayml/stable-diffusion-v1-5
+  max_images_per_class: 375
+  batch_size: 4
+  inference_steps: 25
+  guidance_scale: 7.5
+  image_size: 512
+  seed: 42
+
+synthetic_scaling:
+  ratios: [15]
+  per_class_at_ratio:
+    15: 375
+
+allocation:
+  min_floor: 50
+  max_cap: 375
+  cv_folds: 10
+  synthetic_loss_lambda: 5.0
+
+metrics:
+  ece_bins: 15
+  worst_k_classes: 20
+  cka_subsample: 2000
+  linear_probe_epochs: 20
+  linear_probe_lr: 0.01
+
+scope:
+  cifar_architectures: [resnet18]
+  cifar_pipelines: [baseline, uniform_15x, adaptive_15x, ceiling]
+  # Adaptive 15× uses this allocation policy (CSV: allocation_{name}.csv)
+  cifar_adaptive_policy: predicted_utility
