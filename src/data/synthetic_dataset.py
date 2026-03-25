@@ -45,18 +45,34 @@ def list_synthetic_paths_uniform(
     class_ids: List[str],
     k_per_class: int,
     seed: int = 42,
+    clamp_to_available: bool = False,
 ) -> List[Tuple[Path, str]]:
+    """
+    Sample up to k_per_class PNGs per class. Training keeps strict counts (default).
+    When clamp_to_available=True (e.g. FID export), uses min(k_per_class, len(files)) so
+    incomplete synthetic caches do not abort the pipeline.
+    """
     rng = random.Random(seed)
     items: List[Tuple[Path, str]] = []
     root = Path(synthetic_root)
     for cid in class_ids:
         folder = root / cid
         if not folder.is_dir():
+            if clamp_to_available:
+                raise ValueError(
+                    f"Synthetic class {cid}: folder missing under {root} (cannot export FID)"
+                )
             continue
         files = sorted(folder.glob("*.png"))
-        if len(files) < k_per_class:
-            raise ValueError(f"Synthetic class {cid}: need {k_per_class}, found {len(files)}")
-        chosen = rng.sample(files, k_per_class)
+        n = len(files)
+        if n == 0:
+            if clamp_to_available:
+                raise ValueError(f"Synthetic class {cid}: no PNGs under {folder} (cannot export FID)")
+            continue
+        take = min(k_per_class, n) if clamp_to_available else k_per_class
+        if not clamp_to_available and n < k_per_class:
+            raise ValueError(f"Synthetic class {cid}: need {k_per_class}, found {n}")
+        chosen = rng.sample(files, take)
         for p in chosen:
             items.append((p, cid))
     return items

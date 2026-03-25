@@ -50,17 +50,30 @@ def _export_synthetic_uniform(
     out_dir: Path,
 ) -> int:
     out_dir = Path(out_dir)
-    if out_dir.exists() and any(out_dir.iterdir()):
-        return sum(1 for _ in out_dir.glob("*.png"))
-    out_dir.mkdir(parents=True, exist_ok=True)
     tr_t = get_train_transform(cfg.dataset.image_size)
     _, _, c2i = get_baseline_loaders(cfg, tr_t, get_val_transform(cfg.dataset.image_size))
     cids = class_ids_in_label_order(c2i)
     items = list_synthetic_paths_uniform(
-        synth_root, cids, k_per_class, seed=cfg.generation.seed
+        synth_root,
+        cids,
+        k_per_class,
+        seed=cfg.generation.seed,
+        clamp_to_available=True,
     )
+    n_expected = len(items)
+    if n_expected == 0:
+        raise ValueError("No synthetic images resolved for FID export (empty selection).")
+    if out_dir.exists():
+        n_cached = sum(1 for _ in out_dir.glob("*.png"))
+        if n_cached == n_expected:
+            return n_cached
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     for idx, (p, cid) in enumerate(items):
-        shutil.copy2(p, out_dir / f"{cid}_{idx:06d}.png")
+        src = Path(p).resolve()
+        if not src.is_file():
+            raise FileNotFoundError(f"Missing synthetic file for FID copy: {src}")
+        shutil.copy2(src, out_dir / f"{cid}_{idx:06d}.png")
     return len(items)
 
 
