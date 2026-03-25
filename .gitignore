@@ -16,9 +16,8 @@ env/
 *.ipynb_checkpoints/
 
 # Data (large files, downloaded at runtime)
-data/raw/
-data/synthetic_sd/
-data/tiny_imagenet_5pct/
+data/
+results/
 
 # Model checkpoints (large binary files)
 checkpoints/
