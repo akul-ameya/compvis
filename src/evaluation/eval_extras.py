@@ -46,7 +46,7 @@ def effective_rank(eigenvalues: np.ndarray) -> float:
         return 0.0
     p = ev / s
     p = p[p > 1e-16]
-    return float(np.exp(-(p * np.log(p)).sum())))
+    return float(np.exp(-(p * np.log(p)).sum()))
 
 
 def linear_cka_features(X: np.ndarray, Y: np.ndarray) -> float:
