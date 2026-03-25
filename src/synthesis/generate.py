@@ -5,6 +5,7 @@ Spec: SD v1.5, DPM-Solver++, 25 steps, guidance 7.5, 512 gen then downscale.
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -12,6 +13,36 @@ from typing import Dict, List, Optional
 import torch
 from PIL import Image
 from tqdm import tqdm
+
+_IMG_PNG_RE = re.compile(r"^img_(\d+)\.png$", re.IGNORECASE)
+
+
+def next_synthetic_write_index(class_dir: Path) -> int:
+    """
+    Next index for img_XXXX.png under class_dir (0 if empty).
+    Prefers max numbered img_*.png + 1; falls back to PNG count if none match.
+    """
+    best = -1
+    for p in class_dir.glob("*.png"):
+        m = _IMG_PNG_RE.match(p.name)
+        if m:
+            best = max(best, int(m.group(1)))
+    if best >= 0:
+        return best + 1
+    return len(list(class_dir.glob("*.png")))
+
+
+def cifar100_synthetic_cache_complete(
+    output_dir: Path, images_per_class: int, num_classes: int = 100
+) -> bool:
+    """True when every class folder has at least images_per_class synthetic PNGs."""
+    for i in range(num_classes):
+        d = output_dir / f"{i:03d}"
+        if not d.is_dir():
+            return False
+        if next_synthetic_write_index(d) < images_per_class:
+            return False
+    return True
 
 PROMPT_TEMPLATES = [
     "A photo of a {label}",
@@ -86,12 +117,11 @@ def generate_tiny_imagenet_synthetic(
     for cid in tqdm(class_ids, desc="Tiny-ImageNet classes"):
         class_dir = output_dir / cid
         class_dir.mkdir(exist_ok=True)
-        existing = len(list(class_dir.glob("*.png")))
-        if resume and existing >= images_per_class:
+        start_idx = next_synthetic_write_index(class_dir) if resume else 0
+        if resume and start_idx >= images_per_class:
             total_skip += images_per_class
             continue
 
-        start_idx = existing if resume else 0
         remaining = images_per_class - start_idx
         class_prompts = prompts[cid]
 
@@ -159,6 +189,41 @@ def generate_cifar100_synthetic(
         cifar_root = Path("data/raw/cifar100")
     cifar_root = Path(cifar_root)
     cifar_root.mkdir(parents=True, exist_ok=True)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    total_gen = 0
+    if resume:
+        class_indices = [
+            i
+            for i in range(100)
+            if next_synthetic_write_index(output_dir / f"{i:03d}") < images_per_class
+        ]
+        n_done = 100 - len(class_indices)
+        total_skip = n_done * images_per_class
+        print(
+            f"CIFAR-100 synthetic resume: {len(class_indices)} class(es) need images "
+            f"({n_done} already complete)."
+        )
+    else:
+        class_indices = list(range(100))
+        total_skip = 0
+
+    if not class_indices:
+        log_done: Dict = {
+            "batches": [],
+            "seed": seed,
+            "wall_time_s": 0.0,
+            "images_generated": 0,
+            "images_skipped": total_skip,
+            "throughput_img_per_s": 0.0,
+            "cache_complete": True,
+        }
+        (output_dir / "generation_log.json").write_text(
+            json.dumps(log_done, indent=2), encoding="utf-8"
+        )
+        print("CIFAR-100 synthetic cache already complete; skipped loading SD.")
+        return output_dir
+
     ds = CIFAR100(root=cifar_root, train=True, download=True)
     class_names = ds.classes
 
@@ -177,26 +242,19 @@ def generate_cifar100_synthetic(
     if hasattr(pipe, "enable_attention_slicing"):
         pipe.enable_attention_slicing()
 
-    output_dir.mkdir(parents=True, exist_ok=True)
     generator = torch.Generator(device=device).manual_seed(seed)
 
     log: Dict = {"batches": [], "seed": seed}
     t0 = time.time()
-    total_gen, total_skip = 0, 0
 
-    for class_idx in tqdm(range(100), desc="CIFAR-100 classes"):
+    for class_idx in tqdm(class_indices, desc="CIFAR-100 classes"):
         label = class_names[class_idx]
         cid = f"{class_idx:03d}"
         class_dir = output_dir / cid
         class_dir.mkdir(exist_ok=True)
         class_prompts = [t.format(label=label) for t in PROMPT_TEMPLATES]
 
-        existing = len(list(class_dir.glob("*.png")))
-        if resume and existing >= images_per_class:
-            total_skip += images_per_class
-            continue
-
-        start_idx = existing if resume else 0
+        start_idx = next_synthetic_write_index(class_dir) if resume else 0
         remaining = images_per_class - start_idx
 
         for batch_start in range(0, remaining, batch_size):

@@ -38,7 +38,10 @@ from src.stage2.diagnostics import (
     merge_synthetic_quality,
     utility_from_accs,
 )
-from src.synthesis.generate import generate_cifar100_synthetic
+from src.synthesis.generate import (
+    cifar100_synthetic_cache_complete,
+    generate_cifar100_synthetic,
+)
 from src.training.stage2_train import train_pipeline
 
 
@@ -70,10 +73,10 @@ class Stage2Orchestrator:
     def ensure_cifar100_synthetic(self, force: bool = False) -> Path:
         cfg = self.load_cfg("cifar100.yaml")
         cfg.path_synthetic.mkdir(parents=True, exist_ok=True)
-        if not force and any(cfg.path_synthetic.iterdir()):
-            sub = [d for d in cfg.path_synthetic.iterdir() if d.is_dir()]
-            if len(sub) >= 10:
-                return cfg.path_synthetic
+        if not force and cifar100_synthetic_cache_complete(
+            cfg.path_synthetic, cfg.generation.max_images_per_class
+        ):
+            return cfg.path_synthetic
         generate_cifar100_synthetic(
             output_dir=cfg.path_synthetic,
             model_id=cfg.generation.model_id,
