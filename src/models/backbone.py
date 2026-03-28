@@ -32,7 +32,7 @@ def build_backbone(arch: str, num_classes: int) -> nn.Module:
 def forward_features(model: nn.Module, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     """Return (logits, penultimate) for supported architectures."""
     name = getattr(model, "_arch_name", "")
-    if name == "resnet18" or isinstance(model.fc, nn.Linear) and hasattr(model, "layer4"):
+    if name == "resnet18" or (hasattr(model, "fc") and isinstance(model.fc, nn.Linear) and hasattr(model, "layer4")):
         z = model.conv1(x)
         z = model.bn1(z)
         z = model.relu(z)
@@ -45,7 +45,7 @@ def forward_features(model: nn.Module, x: torch.Tensor) -> Tuple[torch.Tensor, t
         feat = torch.flatten(z, 1)
         logits = model.fc(feat)
         return logits, feat
-    if "mobilenet" in name or hasattr(model, "features") and hasattr(model, "classifier"):
+    if "mobilenet" in name or (hasattr(model, "features") and hasattr(model, "classifier")):
         feat = model.features(x)
         feat = nn.functional.adaptive_avg_pool2d(feat, 1).flatten(1)
         logits = model.classifier(feat)
