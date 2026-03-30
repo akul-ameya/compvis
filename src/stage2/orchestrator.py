@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import torch
-from torch.utils.data import ConcatDataset, DataLoader
+from torch.utils.data import ConcatDataset, DataLoader, WeightedRandomSampler
 
 from src.allocation.policies import compute_allocations, load_allocation_csv, save_allocation_csv
 from src.config import ExperimentConfig, load_experiment_config
@@ -92,6 +92,23 @@ class Stage2Orchestrator:
             cifar_root=cfg.project_root / "data" / "raw" / "cifar100",
         )
         return cfg.path_synthetic
+
+    @staticmethod
+    def _balanced_sampler(n_real: int, n_synth: int) -> WeightedRandomSampler:
+        """WeightedRandomSampler that draws ~50 % real, ~50 % synthetic per epoch.
+
+        Works with both ConcatDataset([real, synth]) and RealSyntheticMixDataset
+        because both layouts place real samples at indices [0, n_real) and
+        synthetic at [n_real, n_real + n_synth).
+        """
+        w_real = 1.0 / n_real
+        w_synth = 1.0 / n_synth
+        weights = [w_real] * n_real + [w_synth] * n_synth
+        return WeightedRandomSampler(
+            weights,
+            num_samples=n_real + n_synth,
+            replacement=True,
+        )
 
     def _run_dir(self, cfg: ExperimentConfig, pipeline: str, arch: str) -> Path:
         d = cfg.path_results_root / cfg.dataset.name / pipeline / arch / _now_tag()
@@ -247,7 +264,7 @@ class Stage2Orchestrator:
         train_loader = DataLoader(
             full,
             batch_size=cfg.training.batch_size,
-            shuffle=True,
+            sampler=self._balanced_sampler(len(real_ds), len(synth_ds)),
             num_workers=cfg.training.num_workers,
             pin_memory=torch.cuda.is_available(),
         )
@@ -293,7 +310,7 @@ class Stage2Orchestrator:
         train_loader = DataLoader(
             full,
             batch_size=cfg.training.batch_size,
-            shuffle=True,
+            sampler=self._balanced_sampler(len(real_ds), len(synth_ds)),
             num_workers=cfg.training.num_workers,
             pin_memory=torch.cuda.is_available(),
         )
