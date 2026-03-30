@@ -222,6 +222,7 @@ class Stage2Orchestrator:
         arch: str,
         ratio: int,
         baseline_ckpt_same_arch: Optional[Path] = None,
+        name: Optional[str] = None,
     ) -> Tuple[Path, Dict[str, Any]]:
         cfg = self.load_cfg(cfg_yaml)
         tr_t = get_train_transform(cfg.dataset.image_size)
@@ -250,7 +251,7 @@ class Stage2Orchestrator:
             num_workers=cfg.training.num_workers,
             pin_memory=torch.cuda.is_available(),
         )
-        pipeline = f"uniform_{ratio}x"
+        pipeline = name or f"uniform_{ratio}x"
         return self._train_job(
             cfg,
             pipeline,
