@@ -1,0 +1,25 @@
+Project Title: The GenAI Augmentation Paradox
+
+1.     Problem Definition (5/5): You have provided an exceptionally clear definition of the "Paradox." You aren't just building a classifier; you are testing a scientific hypothesis regarding synthetic data utility.
+
+2.     Literature Survey (5/5): Your citations are top-tier, referencing major venues like CVPR and NeurIPS. This sets a very strong foundation for a potential DICTA submission.
+
+3.     Dataset and EDA (5/5): You successfully managed the Tiny ImageNet subset. Your visualizations of the 5,000-image stratified split and the class distributions are clear and professional.
+
+4.     Baseline Report (5/5): You reported the standard Top-1 accuracy (35.50%), but you went further by including Expected Calibration Error (ECE). This is a sophisticated metric that is highly relevant to your research question.
+
+5.     Proof of Concept Code (5/5): Your code is highly professional and modular. The notebook is well-organized with Markdown headers, making the logic easy to follow.
+
+6.     Writing Structure (5/5): You adhered perfectly to the IEEE template and maintained a high density of information within the page limit.
+
+
+
+Overall Feedback:
+
+This is a gold-standard Stage 1 submission. You have treated this not just as a coding exercise, but as a formal research inquiry. Your inclusion of representation diagnostics (Linear Probing) and model calibration (ECE) shows a deep understanding of Computer Vision that goes beyond simple accuracy. The code is clean, reproducible, and demonstrates high technical maturity.
+
+
+
+Stage 2 Rescue Advice:
+
+As you move into Stage 2, keep a close eye on your Ablation Study. Since you are investigating whether synthetic data creates a genuine improvement or just "data smoothing," you should look at the per-class performance. Does GenAI help "complex" classes more than "simple" ones? Also, since you are using Top-1 accuracy, consider adding Top-5 accuracy, as is standard for ImageNet-based tasks. Be prepared to report if the "Diffusion Boost" fails to hit the "Ceiling". In research, proving a limitation is just as valuable as achieving a new high score. Keep up the high standard of citations as you expand your Related Work in preparation for the DICTA submission.
