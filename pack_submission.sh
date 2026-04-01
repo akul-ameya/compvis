@@ -16,7 +16,7 @@ zip -r "$ZIPNAME" \
     notebooks/stage2_final_summary.ipynb \
     figures/stage2/ \
     results/all_metrics_consolidated.json \
-    -x "src/__pycache__/*" "src/**/__pycache__/*"
+    -x "src/__pycache__/*" "src/**/__pycache__/*" "figures/stage2/*.pdf"
 
 # Add individual metrics.json files preserving directory structure
 find results -name "metrics.json" -not -path "*_archived*" | while read f; do
