@@ -18,9 +18,11 @@ class SyntheticImageListDataset(Dataset):
         items: List[Tuple[Path, str]],
         transform: Optional[Callable] = None,
         class_to_idx: Optional[Dict[str, int]] = None,
+        native_size: Optional[int] = None,
     ) -> None:
         self.items = items
         self.transform = transform
+        self.native_size = native_size
         if class_to_idx is None:
             ids = sorted({cid for _, cid in items})
             self.class_to_idx = {c: i for i, c in enumerate(ids)}
@@ -34,6 +36,8 @@ class SyntheticImageListDataset(Dataset):
         path, cid = self.items[idx]
         with Image.open(path) as img:
             img = img.convert("RGB")
+            if self.native_size is not None and (img.width != self.native_size or img.height != self.native_size):
+                img = img.resize((self.native_size, self.native_size), Image.LANCZOS)
         if self.transform is not None:
             img = self.transform(img)
         label = self.class_to_idx[cid]

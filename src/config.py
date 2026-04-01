@@ -17,6 +17,7 @@ class DatasetConfig:
     num_classes: int = 200
     real_images_per_class: int = 25
     image_size: int = 224
+    native_resolution: int = 64  # native image resolution before upsampling
 
 
 @dataclass
@@ -126,6 +127,7 @@ def load_experiment_config(yaml_path: Path, project_root: Optional[Path] = None)
         num_classes=int(d.get("num_classes", 200)),
         real_images_per_class=int(d.get("real_images_per_class", 25)),
         image_size=int(d.get("image_size", 224)),
+        native_resolution=int(d.get("native_resolution", 64)),
     )
     p = raw.get("paths", {})
     paths = PathsConfig(

@@ -151,6 +151,9 @@ def evaluate_stage2(
     logits, labels, feats = collect_val_predictions(model, val_loader, device, num_classes)
     preds = logits.argmax(axis=1)
     top1 = float((preds == labels).mean())
+    # Top-5 accuracy
+    top5_preds = np.argsort(logits, axis=1)[:, -5:]
+    top5 = float(np.mean([labels[i] in top5_preds[i] for i in range(len(labels))]))
     pc = per_class_accuracy(logits, labels, num_classes)
     macro = float(np.mean(list(pc.values())))
     worst_k = cfg.metrics.worst_k_classes
@@ -202,6 +205,7 @@ def evaluate_stage2(
 
     out: Dict[str, Any] = {
         "top1": top1,
+        "top5": top5,
         "macro_acc": macro,
         "worst_k_acc": worst20,
         "ece": float(ece),

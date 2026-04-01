@@ -3,6 +3,7 @@ dataset:
   num_classes: 100
   real_images_per_class: 25
   image_size: 224
+  native_resolution: 32
 
 paths:
   raw_data: data/raw/cifar100
@@ -17,7 +18,7 @@ training:
   epochs: 30
   batch_size: 64
   num_workers: 0
-  learning_rate: 3.0e-4
+  learning_rate: 1.0e-4
   weight_decay: 0.01
   mixed_precision: true
   early_stopping_patience: 7

@@ -251,7 +251,7 @@ class Stage2Orchestrator:
         k = cfg.synthetic_scaling.per_class_at_ratio[str(ratio)]
         cids = class_ids_in_label_order(c2i)
         items = list_synthetic_paths_uniform(synth_root, cids, k, seed=cfg.generation.seed)
-        synth_ds = SyntheticImageListDataset(items, tr_t, c2i)
+        synth_ds = SyntheticImageListDataset(items, tr_t, c2i, native_size=cfg.dataset.native_resolution)
         b_ok = bool(
             baseline_ckpt_same_arch and Path(baseline_ckpt_same_arch).is_file()
         )
@@ -297,7 +297,7 @@ class Stage2Orchestrator:
         synth_root = get_resolved_synthetic_root(cfg)
         alloc = load_allocation_csv(Path(allocation_csv))
         items = list_synthetic_paths_from_allocation(synth_root, alloc, seed=cfg.generation.seed)
-        synth_ds = SyntheticImageListDataset(items, tr_t, c2i)
+        synth_ds = SyntheticImageListDataset(items, tr_t, c2i, native_size=cfg.dataset.native_resolution)
         b_ok = bool(
             baseline_ckpt_same_arch and Path(baseline_ckpt_same_arch).is_file()
         )
@@ -446,6 +446,7 @@ class Stage2Orchestrator:
                                 "arch": arch_dir.name,
                                 "run": run.name,
                                 "top1": m.get("top1"),
+                                "top5": m.get("top5"),
                                 "path": str(run),
                             }
                         )

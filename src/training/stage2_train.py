@@ -36,7 +36,7 @@ def train_pipeline(
 ) -> Dict[str, List[float]]:
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs)
     early = EarlyStopping(patience=early_stopping_patience)

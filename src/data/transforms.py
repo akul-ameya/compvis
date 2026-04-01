@@ -13,6 +13,8 @@ def get_train_transform(image_size: int = 224) -> Callable:
             transforms.Resize(256),
             transforms.RandomResizedCrop(image_size),
             transforms.RandomHorizontalFlip(p=0.5),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
+            transforms.RandAugment(num_ops=2, magnitude=9),
             transforms.ToTensor(),
             transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
         ]
