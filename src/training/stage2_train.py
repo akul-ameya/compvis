@@ -14,7 +14,15 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
 from src.training.synthetic_loss import compute_real_class_centroids, train_one_epoch_synthetic_aware
-from src.training.train_eval import EarlyStopping, evaluate, train_one_epoch
+from src.training.train_eval import evaluate, train_one_epoch
+
+
+def _plateau_stop(val_accs: List[float], window: int = 5, tol: float = 1e-4) -> bool:
+    """Return True when the last *window* val accuracies span < *tol*."""
+    if len(val_accs) < window:
+        return False
+    recent = val_accs[-window:]
+    return (max(recent) - min(recent)) < tol
 
 
 def train_pipeline(
@@ -39,7 +47,6 @@ def train_pipeline(
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs)
-    early = EarlyStopping(patience=early_stopping_patience)
     scaler = GradScaler(enabled=mixed_precision)
 
     use_syn = bool(
@@ -64,12 +71,29 @@ def train_pipeline(
     }
     best_path = run_dir / "best.pt"
     final_path = run_dir / "final.pt"
-    t0 = time.time()
+    ckpt_path = run_dir / "checkpoint.pt"
 
     model.to(device)
     best_val = 0.0
+    start_epoch = 1
+    wall_elapsed = 0.0
 
-    for epoch in range(1, epochs + 1):
+    # ── Resume from checkpoint if interrupted ────────────────────
+    if ckpt_path.is_file():
+        ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+        model.load_state_dict(ckpt["model"])
+        optimizer.load_state_dict(ckpt["optimizer"])
+        scheduler.load_state_dict(ckpt["scheduler"])
+        scaler.load_state_dict(ckpt["scaler"])
+        history = ckpt["history"]
+        best_val = ckpt["best_val"]
+        start_epoch = ckpt["epoch"] + 1
+        wall_elapsed = ckpt.get("wall_elapsed", 0.0)
+        print(f"  ↻ Resuming from epoch {start_epoch} (best_val={best_val:.4f})")
+
+    t0 = time.time()
+
+    for epoch in range(start_epoch, epochs + 1):
         cur_lr = optimizer.param_groups[0]["lr"]
         history["lr"].append(cur_lr)
         if use_syn and centroids is not None and frozen_reference_model is not None:
@@ -104,12 +128,28 @@ def train_pipeline(
 
         print(f"Epoch {epoch}/{epochs}  train_loss={tl:.4f} acc={ta:.4f}  val_loss={vl:.4f} acc={va:.4f}")
 
-        if early.step(va):
-            print(f"Early stopping at epoch {epoch}")
+        # Save resumable checkpoint every epoch
+        torch.save(
+            {
+                "epoch": epoch,
+                "model": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "scaler": scaler.state_dict(),
+                "history": history,
+                "best_val": best_val,
+                "wall_elapsed": wall_elapsed + (time.time() - t0),
+            },
+            ckpt_path,
+        )
+
+        # Plateau early stopping: last 5 epochs within 0.01 pp
+        if _plateau_stop(history["val_acc"], window=5, tol=1e-4):
+            print(f"  Early stopping at epoch {epoch} (plateau: last 5 val_acc range < 0.01%)")
             break
 
     torch.save(model.state_dict(), final_path)
-    wall = time.time() - t0
+    wall = wall_elapsed + (time.time() - t0)
     curves = {k: v for k, v in history.items() if isinstance(v, list)}
     with (run_dir / "training_curves.json").open("w", encoding="utf-8") as f:
         json.dump(curves, f, indent=2)
@@ -124,6 +164,9 @@ def train_pipeline(
             f,
             indent=2,
         )
+    # Clean up checkpoint after successful completion
+    if ckpt_path.is_file():
+        ckpt_path.unlink()
 
     history["wall_time_s"] = wall
     history["best_val_top1"] = best_val
