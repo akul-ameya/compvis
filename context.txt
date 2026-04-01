@@ -1,0 +1,172 @@
+Title: GenAI Augmentation Paradox — Presentation Structure
+
+Objective:
+Create a professional, conference-level (DICTA-style) presentation explaining a controlled empirical study on diffusion-based synthetic data augmentation in low-data image classification.
+
+Core Message:
+Synthetic data provides limited but measurable benefits in low-data regimes, exhibits non-monotonic scaling with saturation, and cannot replace real data diversity. Allocation strategies do not significantly improve outcomes, indicating deeper limitations in synthetic data utility.
+
+Slide Structure:
+
+1. Title Slide
+
+* Paper title
+* Authors
+* Institution
+* Optional: subtitle “A Controlled Empirical Study”
+
+2. Motivation
+
+* Low-data problem in vision
+* Overfitting, poor calibration, unstable features
+* Key question: Can synthetic data recover performance?
+
+3. Problem Setup
+
+* Tiny ImageNet (200 classes, 64×64)
+* 5% data (25 images/class)
+* Pipelines:
+
+  * Baseline
+  * DiffusionBoost (5×, 10×, 15×)
+  * Adaptive DiffusionBoost
+  * Ceiling
+
+4. Key Idea
+
+* “Dose–response framework”
+* Vary synthetic data budget systematically
+* Evaluate scaling behavior, not just single-point improvement
+
+5. Methodology (Visual Slide)
+
+* Data → Diffusion → Training → Evaluation
+* Emphasize:
+
+  * fixed synthetic pool
+  * controlled pipelines
+  * balanced sampling
+  * multi-axis evaluation
+
+6. Evaluation Axes
+
+* Accuracy
+* Calibration (ECE)
+* Robustness (corruptions)
+* Representation (linear probe, rank)
+* Per-class impact (HHR)
+
+7. Main Result — Scaling Curve
+
+* Insert scaling figure
+* Key message:
+
+  * Peak at 5×
+  * Saturation beyond
+  * Non-monotonic behavior
+
+8. Key Metric
+
+* Normalized gain definition
+* Result:
+
+  * Only ~10% of recoverable gap achieved
+
+9. Allocation Result
+
+* Insert allocation comparison figure
+* Message:
+
+  * No meaningful improvement (≤1pp)
+  * Allocation ≠ solution
+
+10. Per-Class Analysis
+
+* Insert delta histogram
+* Message:
+
+  * Help vs harm
+  * HHR collapses to 0 at high budgets
+
+11. Calibration
+
+* Insert ECE plot if available
+* Message:
+
+  * Raw ECE improves
+  * But partly due to reduced confidence
+
+12. Robustness Trade-off
+
+* Insert corruption figure
+* Message:
+
+  * Better blur/brightness
+  * Worse noise
+  * Accuracy–robustness trade-off
+
+13. Representation Geometry
+
+* Insert eigenvalue / probe figure
+* Message:
+
+  * Better separability
+  * Not equivalent to better generalization
+
+14. Core Insight
+
+* Synthetic data ≠ uniformly useful
+* Utility is conditional
+* Scaling alone fails
+
+15. The Paradox
+
+* Synthetic helps…
+* But cannot replace real data
+* Gains saturate quickly
+
+16. Limitations
+
+* Single dataset (Tiny ImageNet)
+* Single seed
+* No quality filtering
+* FID limitations
+
+17. Conclusion
+
+* Synthetic data is a limited tool
+* Works in low-data regime
+* Not a substitute for real diversity
+
+18. Optional (if time)
+
+* Future work:
+
+  * quality filtering
+  * better generation alignment
+  * multi-dataset validation
+
+Design Constraints:
+
+* Clean, minimal slides
+* No dense paragraphs
+* 3–5 bullets per slide max
+* Large readable fonts
+* Consistent layout and spacing
+* Neutral color palette (no high contrast or flashy gradients)
+* Emphasize figures over text
+* Each slide should communicate one idea only
+
+Tone:
+
+* Formal, precise, research-oriented
+* Avoid hype
+* Avoid vague claims
+* Use cautious phrasing (“suggests”, “consistent with”)
+
+Output Expectation:
+
+* Professional academic presentation
+* Clear narrative flow
+* Strong visual emphasis
+* Suitable for conference-style presentation

@@ -1,0 +1,18 @@
+1. One table only
+
+Same structure as Tiny ImageNet:
+
+Baseline
+Uniform 5×
+Uniform 10×
+Uniform 15×
+(+ optionally best adaptive)
+
+Metrics:
+
+Top-1
+ECE (optional)
+
+One figure (optional but strong)
+
+Scaling curve only.
