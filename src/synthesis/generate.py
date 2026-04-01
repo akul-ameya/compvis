@@ -40,7 +40,8 @@ def cifar100_synthetic_cache_complete(
         d = output_dir / f"{i:03d}"
         if not d.is_dir():
             return False
-        if next_synthetic_write_index(d) < images_per_class:
+        actual_count = len(list(d.glob("*.png")))
+        if actual_count < images_per_class:
             return False
     return True
 
@@ -196,7 +197,8 @@ def generate_cifar100_synthetic(
         class_indices = [
             i
             for i in range(100)
-            if next_synthetic_write_index(output_dir / f"{i:03d}") < images_per_class
+            if not (output_dir / f"{i:03d}").is_dir()
+            or len(list((output_dir / f"{i:03d}").glob("*.png"))) < images_per_class
         ]
         n_done = 100 - len(class_indices)
         total_skip = n_done * images_per_class
@@ -254,8 +256,10 @@ def generate_cifar100_synthetic(
         class_dir.mkdir(exist_ok=True)
         class_prompts = [t.format(label=label) for t in PROMPT_TEMPLATES]
 
-        start_idx = next_synthetic_write_index(class_dir) if resume else 0
-        remaining = images_per_class - start_idx
+        write_idx = next_synthetic_write_index(class_dir) if resume else 0
+        existing_count = len(list(class_dir.glob("*.png"))) if resume else 0
+        remaining = images_per_class - existing_count
+        start_idx = write_idx
 
         for batch_start in range(0, remaining, batch_size):
             actual_bs = min(batch_size, remaining - batch_start)
