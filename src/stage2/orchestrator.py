@@ -141,50 +141,62 @@ class Stage2Orchestrator:
         run_dir = self._run_dir(cfg, pipeline, arch)
         model = build_backbone(arch, cfg.dataset.num_classes)
 
-        synth_pipe = pipeline.startswith("uniform") or pipeline.startswith("adaptive")
         bpath = Path(baseline_ckpt_same_arch) if baseline_ckpt_same_arch else None
-        use_sa = (
-            cfg.training.synthetic_aware_loss
-            and synth_pipe
-            and bpath is not None
-            and bpath.is_file()
-            and real_ds_for_centroids is not None
-        )
-        frozen_ref = None
-        centroid_loader = None
-        if use_sa:
-            frozen_ref = build_backbone(arch, cfg.dataset.num_classes)
-            frozen_ref.load_state_dict(torch.load(bpath, map_location=self.device))
-            frozen_ref.to(self.device).eval()
-            for p in frozen_ref.parameters():
-                p.requires_grad_(False)
-            centroid_loader = DataLoader(
-                real_ds_for_centroids,
-                batch_size=cfg.training.batch_size,
-                shuffle=False,
-                num_workers=cfg.training.num_workers,
-                pin_memory=torch.cuda.is_available(),
-            )
+        best_path = run_dir / "best.pt"
+        ckpt_path = run_dir / "checkpoint.pt"
 
-        train_pipeline(
-            model,
-            train_loader,
-            val_loader,
-            self.device,
-            run_dir,
-            epochs=cfg.training.epochs,
-            lr=cfg.training.learning_rate,
-            weight_decay=cfg.training.weight_decay,
-            mixed_precision=cfg.training.mixed_precision,
-            early_stopping_patience=cfg.training.early_stopping_patience,
-            synthetic_aware=use_sa,
-            frozen_reference_model=frozen_ref,
-            centroid_loader=centroid_loader,
-            num_classes=cfg.dataset.num_classes,
-            synthetic_lambda=cfg.allocation.synthetic_loss_lambda,
-        )
-        sd = torch.load(run_dir / "best.pt", map_location=self.device)
-        model.load_state_dict(sd)
+        # Skip training if best.pt already exists (e.g. plateaued early)
+        if best_path.is_file():
+            print(f"  ✓ Found existing best.pt in {run_dir.name}, skipping training → evaluate only")
+            if ckpt_path.is_file():
+                ckpt_path.unlink()
+                print(f"    (cleaned up leftover checkpoint.pt)")
+            sd = torch.load(best_path, map_location=self.device)
+            model.load_state_dict(sd)
+        else:
+            synth_pipe = pipeline.startswith("uniform") or pipeline.startswith("adaptive")
+            use_sa = (
+                cfg.training.synthetic_aware_loss
+                and synth_pipe
+                and bpath is not None
+                and bpath.is_file()
+                and real_ds_for_centroids is not None
+            )
+            frozen_ref = None
+            centroid_loader = None
+            if use_sa:
+                frozen_ref = build_backbone(arch, cfg.dataset.num_classes)
+                frozen_ref.load_state_dict(torch.load(bpath, map_location=self.device))
+                frozen_ref.to(self.device).eval()
+                for p in frozen_ref.parameters():
+                    p.requires_grad_(False)
+                centroid_loader = DataLoader(
+                    real_ds_for_centroids,
+                    batch_size=cfg.training.batch_size,
+                    shuffle=False,
+                    num_workers=cfg.training.num_workers,
+                    pin_memory=torch.cuda.is_available(),
+                )
+
+            train_pipeline(
+                model,
+                train_loader,
+                val_loader,
+                self.device,
+                run_dir,
+                epochs=cfg.training.epochs,
+                lr=cfg.training.learning_rate,
+                weight_decay=cfg.training.weight_decay,
+                mixed_precision=cfg.training.mixed_precision,
+                early_stopping_patience=cfg.training.early_stopping_patience,
+                synthetic_aware=use_sa,
+                frozen_reference_model=frozen_ref,
+                centroid_loader=centroid_loader,
+                num_classes=cfg.dataset.num_classes,
+                synthetic_lambda=cfg.allocation.synthetic_loss_lambda,
+            )
+            sd = torch.load(best_path, map_location=self.device)
+            model.load_state_dict(sd)
 
         ref_cka = None
         if bpath is not None and bpath.is_file() and pipeline != "baseline":
