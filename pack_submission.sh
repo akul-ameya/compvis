@@ -8,10 +8,8 @@ rm -f "$ZIPNAME"
 echo "Packing submission..."
 
 zip -r "$ZIPNAME" \
-    README.md \
-    requirements.txt \
-    "Report Stage 2 Final.docx" \
     "Report Stage 2 Final.pdf" \
+    "Presss.pptx" \
     configs/ \
     src/ \
     notebooks/stage2_experiments.ipynb \
