@@ -17,7 +17,7 @@ from src.training.synthetic_loss import compute_real_class_centroids, train_one_
 from src.training.train_eval import evaluate, train_one_epoch
 
 
-def _plateau_stop(val_accs: List[float], window: int = 5, tol: float = 1e-4) -> bool:
+def _plateau_stop(val_accs: List[float], window: int = 5, tol: float = 1e-2) -> bool:
     """Return True when the last *window* val accuracies span < *tol*."""
     if len(val_accs) < window:
         return False
@@ -144,7 +144,7 @@ def train_pipeline(
         )
 
         # Plateau early stopping: last 5 epochs within 0.01 pp
-        if _plateau_stop(history["val_acc"], window=5, tol=1e-4):
+        if _plateau_stop(history["val_acc"], window=5, tol=1e-2):
             print(f"  Early stopping at epoch {epoch} (plateau: last 5 val_acc range < 0.01%)")
             break
 
